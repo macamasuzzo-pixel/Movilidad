@@ -1,4 +1,4 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -512,30 +512,33 @@ function stC(v){if(!v)return'e';if(v==='DC')return'g';if(v.startsWith('MD'))retu
 
 // ── STORAGE ──
 async function loadData(){
-  // Always load localStorage first as immediate fallback
+  // ALWAYS use localStorage as primary source
   let localData = {};
   try{const r=localStorage.getItem(skK(mes,anio));localData=r?JSON.parse(r):{}}catch(e){}
 
-  if(cloudMode){
+  if(cloudMode && Object.keys(localData).length === 0){
+    // Only fetch from cloud if local is empty
     try{
       showSyncStatus('🔄 Cargando...');
       const res = await fetch(`${API_URL}?action=load&key=${skK(mes,anio)}`);
       const json = await res.json();
-      // If cloud has data use it, otherwise use localStorage
       if(json.data && Object.keys(json.data).length > 0){
         data = json.data;
+        // Save to localStorage so next load is instant
+        try{localStorage.setItem(skK(mes,anio),JSON.stringify(data));}catch(e){}
         showSyncStatus('☁️ Sincronizado',false);
-      } else {
-        // Cloud empty — use local (e.g. just imported but not yet saved to cloud)
-        data = localData;
-        showSyncStatus('💾 Local',false);
+        return;
       }
-      return;
     }catch(e){
-      console.warn('Cloud load failed, using localStorage',e);
+      console.warn('Cloud load failed',e);
     }
   }
   data = localData;
+  if(Object.keys(localData).length > 0){
+    showSyncStatus('💾 Local',false);
+  } else {
+    showSyncStatus('☁️ Nube activa',false);
+  }
 }
 async function saveData(silent=false){
   if(cloudMode){
@@ -550,6 +553,8 @@ async function saveData(silent=false){
       });
       const json = await res.json();
       if(json.error){toast('❌ '+json.error);return;}
+      // Also save to localStorage as backup
+      try{localStorage.setItem(skK(mes,anio),JSON.stringify(data));}catch(e){}
       hasUnsaved=false;setPill(false);
       showSyncStatus('☁️ Guardado en nube',false);
       if(!silent)toast('☁️ Guardado en la nube correctamente');
@@ -1239,11 +1244,26 @@ function showSyncStatus(msg, loading=false){
 // ── REFRESH ──
 async function refreshCloud(){
   if(hasUnsaved){
-    if(!confirm('Tenés cambios sin guardar. ¿Actualizás igual? Se perderán los cambios.'))return;
+    if(!confirm('Tenés cambios sin guardar. ¿Guardás antes de actualizar?')){return;}
+    await saveData(true);
   }
-  await loadData();
-  render();
-  toast('🔄 Datos actualizados desde la nube');
+  // Force cloud fetch regardless of local
+  try{
+    showSyncStatus('🔄 Sincronizando...',true);
+    const res = await fetch(`${API_URL}?action=load&key=${skK(mes,anio)}`);
+    const json = await res.json();
+    if(json.data && Object.keys(json.data).length > 0){
+      data = json.data;
+      try{localStorage.setItem(skK(mes,anio),JSON.stringify(data));}catch(e){}
+      render();
+      showSyncStatus('☁️ Sincronizado',false);
+      toast('🔄 Datos actualizados desde la nube');
+    } else {
+      toast('ℹ️ La nube está vacía — guardá los datos primero');
+    }
+  }catch(e){
+    toast('⚠️ No se pudo conectar a la nube');
+  }
 }
 
 // ── INIT ──
@@ -1252,13 +1272,7 @@ updThr();
   await loadData();
   render();
   setPill(false);
-  // Auto-refresh every 60 seconds to pick up other users' changes
-  setInterval(async()=>{
-    if(!hasUnsaved && !isLoading){
-      await loadData();
-      render();
-    }
-  }, 60000);
+  // No auto-refresh — use the 🔄 button to manually sync
 })();
 </script>
 </body>
