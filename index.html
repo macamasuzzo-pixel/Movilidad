@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -475,6 +475,12 @@ const VEH=[
   {code:'CV-37', desc:'IVECO',                      tipo:'MP',area:'Operaciones',       sec:null},
   {code:'VACTOR',desc:'Foton',                      tipo:'MP',area:'Operaciones',       sec:null},
   {code:'CV-32', desc:'IVECO TECTOR',               tipo:'MP',area:'Operaciones',       sec:null},
+  {code:'MV-83', desc:'NEWHOLLAND',                tipo:'MP',area:'Operaciones',       sec:null},
+  {code:'VC-05', desc:'Hilux',                     tipo:'ML',area:'Operaciones',       sec:null},
+  {code:'VC-08', desc:'Ford Ranger',               tipo:'ML',area:'Operaciones',       sec:null},
+  {code:'VC-10', desc:'Ford Ranger',               tipo:'ML',area:'Operaciones',       sec:null},
+  {code:'VL-123',desc:'Fotón',                     tipo:'ML',area:'Operaciones',       sec:null},
+  {code:'VL-133',desc:'Fotón',                     tipo:'ML',area:'Operaciones',       sec:null},
 ];
 
 const CYCS=['','DC','MD-OTR','NU-OTR','SD'];
@@ -506,20 +512,30 @@ function stC(v){if(!v)return'e';if(v==='DC')return'g';if(v.startsWith('MD'))retu
 
 // ── STORAGE ──
 async function loadData(){
+  // Always load localStorage first as immediate fallback
+  let localData = {};
+  try{const r=localStorage.getItem(skK(mes,anio));localData=r?JSON.parse(r):{}}catch(e){}
+
   if(cloudMode){
     try{
       showSyncStatus('🔄 Cargando...');
       const res = await fetch(`${API_URL}?action=load&key=${skK(mes,anio)}`);
       const json = await res.json();
-      data = json.data || {};
-      showSyncStatus('☁️ Sincronizado',false);
+      // If cloud has data use it, otherwise use localStorage
+      if(json.data && Object.keys(json.data).length > 0){
+        data = json.data;
+        showSyncStatus('☁️ Sincronizado',false);
+      } else {
+        // Cloud empty — use local (e.g. just imported but not yet saved to cloud)
+        data = localData;
+        showSyncStatus('💾 Local',false);
+      }
       return;
     }catch(e){
       console.warn('Cloud load failed, using localStorage',e);
-      cloudMode = false;
     }
   }
-  try{const r=localStorage.getItem(skK(mes,anio));data=r?JSON.parse(r):{}}catch(e){data={}}
+  data = localData;
 }
 async function saveData(silent=false){
   if(cloudMode){
@@ -750,6 +766,21 @@ function processGPSRows(rows,fname){
     💡 Los estados marcados con <span class="gps-badge">GPS</span> pueden editarse manualmente en el Calendario.`;
   showInfo(info);
   toast(`✅ ${imported} registros importados de ${[...monthsFound].size||monthsFound.size} meses`);
+
+  // Auto-switch to calendar of first detected month and reload data
+  if(monthsFound.size > 0){
+    const firstMonth = [...monthsFound][0];
+    const parts = firstMonth.split(' ');
+    const mIdx = MESES.indexOf(parts[0]);
+    const y = parseInt(parts[1]);
+    if(mIdx > 0){
+      mes = mIdx; anio = y;
+      document.getElementById('selM').value = mIdx;
+      document.getElementById('inpA').value = y;
+      // Reload from localStorage (where import just saved)
+      loadData().then(()=>{ render(); sw('cal'); });
+    }
+  }
 }
 
 function showInfo(html){
