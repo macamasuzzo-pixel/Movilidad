@@ -548,7 +548,7 @@ async function saveData(silent=false){
       if(!pwd) return;
       const res = await fetch(API_URL,{
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
         body:JSON.stringify({action:'save',key:skK(mes,anio),data,password:pwd})
       });
       const json = await res.json();
@@ -955,7 +955,7 @@ async function clearMonth(){
       if(!pwd) return;
       await fetch(API_URL,{
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
         body:JSON.stringify({action:'delete',key:skK(mes,anio),password:pwd})
       });
     }catch(e){console.warn('Cloud delete failed',e)}
@@ -1277,3 +1277,4 @@ updThr();
 </script>
 </body>
 </html>
+
